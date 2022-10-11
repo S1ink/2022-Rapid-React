@@ -34,15 +34,15 @@ public final class RapidReactVision {
 		public boolean setActive() { return VisionServer.setCamera(this.key); }
 	}
 	public static enum Pipelines {
-		HUB_TRACKER		("Upper-Hub Pipeline"),		// hub position tracking
-		CARGO_TRACKER	("Cargo Pipeline");			// cargo position tracking
+		HUB_OPENCV		("Upper Hub Pipeline"),		// hub position tracking
+		CARGO_OPENCV	("Cargo Pipeline");			// cargo position tracking
 
 		public final String key;
 		private Pipelines(String k) {
 			this.key = k;
 		}
 
-		public int getIndex() { return VisionServer.findCameraIdx(this.key); }
+		public int getIndex() { return VisionServer.findPipelineIdx(this.key); }
 		public VisionServer.VsPipeline getObject() { return VisionServer.getPipeline(this.key); }
 		public NetworkTable getTable() { return VisionServer.getPipelinesTable().getSubTable(this.key); }
 		public boolean setActive() { return VisionServer.setPipeline(this.key); }
@@ -55,28 +55,28 @@ public final class RapidReactVision {
 
 	private RapidReactVision() {
 		if(VisionServer.isConnected()) {
-			this.upperhub = Pipelines.HUB_TRACKER.getObject();
-			this.cargo = Pipelines.CARGO_TRACKER.getObject();
+			this.upperhub = Pipelines.HUB_OPENCV.getObject();
+			this.cargo = Pipelines.CARGO_OPENCV.getObject();
 		}
 		// if(!VisionServer.isConnected()) {
 		// 	new Trigger(()->VisionServer.isConnected()).whenActive(
 		// 		()->{
-		// 			this.upperhub = Pipelines.HUB_TRACKER.getObject();
-		// 			this.cargo = Pipelines.CARGO_TRACKER.getObject();
+		// 			this.upperhub = Pipelines.HUB_OPENCV.getObject();
+		// 			this.cargo = Pipelines.CARGO_OPENCV.getObject();
 		// 		}
 		// 	);
 		// } else {
-		// 	this.upperhub = Pipelines.HUB_TRACKER.getObject();
-		// 	this.cargo = Pipelines.CARGO_TRACKER.getObject();
+		// 	this.upperhub = Pipelines.HUB_OPENCV.getObject();
+		// 	this.cargo = Pipelines.CARGO_OPENCV.getObject();
 		// }
 	}
 	private static RapidReactVision inst = new RapidReactVision();
 	//public static boolean safeInit() { return inst != null; }
 
 
-	public static boolean hasHubPipeline() { return Pipelines.HUB_TRACKER.getObject() != null; }
+	public static boolean hasHubPipeline() { return Pipelines.HUB_OPENCV.getObject() != null; }
 	public static boolean isHubPipelineValid() { return inst.upperhub != null; }
-	public static boolean hasCargoPipeline() { return Pipelines.CARGO_TRACKER.getObject() != null; }
+	public static boolean hasCargoPipeline() { return Pipelines.CARGO_OPENCV.getObject() != null; }
 	public static boolean isCargoPipelineValid() { return inst.cargo != null; }
 	public static boolean hasPipelines() { return hasHubPipeline() && hasCargoPipeline(); }
 	public static boolean arePipelinesValid() { return isHubPipelineValid() && isCargoPipelineValid(); }
@@ -84,7 +84,7 @@ public final class RapidReactVision {
 	public static boolean verifyHubPipeline() {
 		if(!isHubPipelineValid()) {
 			//System.out.println("VerifyHubPipeline: pipeline not valid, updating...");
-			inst.upperhub = Pipelines.HUB_TRACKER.getObject();
+			inst.upperhub = Pipelines.HUB_OPENCV.getObject();
 			return isHubPipelineValid();
 		}
 		//System.out.println("VerifyHubPipeline: pipeline already valid");
@@ -92,7 +92,7 @@ public final class RapidReactVision {
 	}
 	public static boolean verifyCargoPipeline() {
 		if(!isCargoPipelineValid()) {
-			inst.cargo = Pipelines.CARGO_TRACKER.getObject();
+			inst.cargo = Pipelines.CARGO_OPENCV.getObject();
 			return isCargoPipelineValid();
 		}
 		return true;
@@ -273,12 +273,12 @@ public final class RapidReactVision {
 	public static boolean activeTargetMatchesAlliance(DriverStation.Alliance a) {
 		switch(a) {
 			case Red:
-				return VisionServer.getActiveTargetName().equals("Cargo-1r");
+				return VisionServer.getTarget("Cargo-1r").isUpdated();
 			case Blue:
-				return VisionServer.getActiveTargetName().equals("Cargo-1b");
+				return VisionServer.getTarget("Cargo-1b").isUpdated();
 			case Invalid:
 			default:
-				return VisionServer.getActiveTargetName().equals("none");
+				return true;
 		}
 	}
 	public static boolean disableCargoProcessing() {		// returns false on failure
@@ -289,7 +289,7 @@ public final class RapidReactVision {
 
 	public static VisionServer.TargetData getHubPosition() {	// returns null on incorrect target
 		verifyHubPipelineActive();
-		return VisionServer.getTargetDataIfMatching("Upper-Hub");
+		return VisionServer.getTarget("Upper-Hub").getTargetInfo();
 	}
 	public static boolean isHubDetected() {
 		return getHubPosition() != null;
@@ -300,17 +300,17 @@ public final class RapidReactVision {
 		switch(a) {
 			case Red:
 				if(verifyRedCargo(true) && verifyBlueCargo(false)) {
-					return VisionServer.getTargetDataIfMatching("Cargo-1r");
+					return VisionServer.getTarget("Cargo-1r").getTargetInfo();
 				}
 				break;
 			case Blue:
 				if(verifyRedCargo(false) && verifyBlueCargo(true)) {
-					return VisionServer.getTargetDataIfMatching("Cargo-1b");
+					return VisionServer.getTarget("Cargo-1b").getTargetInfo();
 				}
 				break;
 			case Invalid:
 			default:
-				return VisionServer.getTargetData();
+				return null;
 		}
 		return null;
 	}

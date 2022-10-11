@@ -114,6 +114,9 @@ public class Runtime extends TimedRobot {
 
 	@Override public void robotInit() {
 
+		// NetworkTableInstance.getDefault().setServer(new String[]{"wpilibpi", "192.168.0.11"});
+		// System.out.println("NT Connected?: " + NetworkTableInstance.getDefault().isConnected());
+
 		new Trigger(()->VisionServer.isConnected()).whenActive(
 			new LambdaCommand(()->System.out.println("Coprocessor Connected!"))
 		);
@@ -226,8 +229,8 @@ public class Runtime extends TimedRobot {
 			invert =				Xbox.Digital.Y,
 			pipe_increment =		Xbox.Digital.DR,
 			pipe_decrement =		Xbox.Digital.DL,
-			toggle_vision =			Xbox.Digital.DB,
-			toggle_stats =			Xbox.Digital.DT
+			toggle_vision =			Xbox.Digital.DB//,
+			//toggle_stats =			Xbox.Digital.DT
 		;
 
 		DigitalSupplier dm = change_drivemode.getPressedSupplier(this.input);
@@ -256,7 +259,7 @@ public class Runtime extends TimedRobot {
 		this.drivebase.modeDrive().setDriveOptions(new DriveMode[]{DriveMode.TANK, DriveMode.ARCADE});
 
 		toggle_vision.getCallbackFrom(this.input).whenActive(VisionSubsystem.ToggleProcessing.Get());
-		toggle_stats.getCallbackFrom(this.input).whenActive(VisionSubsystem.ToggleStatistics.Get());
+		//toggle_stats.getCallbackFrom(this.input).whenActive(VisionSubsystem.ToggleStatistics.Get());
 		pipe_increment.getCallbackFrom(this.input).whenActive(VisionSubsystem.IncrementPipeline.Get());
 		pipe_decrement.getCallbackFrom(this.input).whenActive(VisionSubsystem.DecrementPipeline.Get());
 		change_camera.getCallbackFrom(this.input).whenPressed(VisionSubsystem.IncrementCamera.Get());
@@ -404,7 +407,7 @@ public class Runtime extends TimedRobot {
 			climb_toggle = 			Attack3.Digital.TB,		// right stick
 
 			toggle_vision =			Attack3.Digital.B1,
-			toggle_stats =			Attack3.Digital.B2,
+			//toggle_stats =			Attack3.Digital.B2,
 			pipe_increment =		Attack3.Digital.B4,
 			pipe_decrement =		Attack3.Digital.B3
 		;
@@ -433,7 +436,7 @@ public class Runtime extends TimedRobot {
 		this.drivebase.modeDrive().setDriveOptions(new DriveMode[]{DriveMode.TANK, DriveMode.ARCADE});
 
 		toggle_vision.getCallbackFrom(this.stick_left).whenActive(VisionSubsystem.ToggleProcessing.Get());
-		toggle_stats.getCallbackFrom(this.stick_left).whenActive(VisionSubsystem.ToggleStatistics.Get());
+		//toggle_stats.getCallbackFrom(this.stick_left).whenActive(VisionSubsystem.ToggleStatistics.Get());
 		pipe_increment.getCallbackFrom(this.stick_left).whenActive(VisionSubsystem.IncrementPipeline.Get());
 		pipe_decrement.getCallbackFrom(this.stick_left).whenActive(VisionSubsystem.DecrementPipeline.Get());
 		change_camera.getCallbackFrom(this.stick_left).whenPressed(VisionSubsystem.IncrementCamera.Get());

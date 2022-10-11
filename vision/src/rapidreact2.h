@@ -11,7 +11,14 @@
 #include "core/visionserver2.h"
 #include "core/extensions.h"
 #include "core/target.h"
+#include "core/mem.h"
 
+
+// UPPER HUB DETECTION
+// TODO:
+/*
+ - update rotational angle derivation (primarily U/D)
+*/
 
 class UHPipeline : public vs2::VPipeline<UHPipeline> {
 public:
@@ -38,7 +45,9 @@ private:	// currently the starting size is 848 bytes
 	cv::Size range_buff;
 	struct UpperHub : public vs2::Target {
 	friend class UHPipeline;
-		inline static const size_t min = 4, max = 6;
+		inline static constexpr size_t
+			MIN_DETECT = 4,
+			MAX_DETECT = 6;
 		inline static const std::array<cv::Point3f, 6> world_coords{	// left to right
 			cv::Point3f(0.f, 103.f, 26.73803044f),				// @c=0
 			cv::Point3f(10.23220126f, 103.f, 24.70271906f),		// @c=10.5
@@ -64,6 +73,9 @@ private:	// currently the starting size is 848 bytes
 };
 
 
+
+
+
 enum class CargoColor {
 	NONE = 0b00,
 	RED = 0b01,
@@ -72,6 +84,7 @@ enum class CargoColor {
 };
 template<typename t = uint8_t>
 inline t operator~(CargoColor c) { return static_cast<t>(c); }
+
 
 template<typename t = float>
 struct CvCargo_ {
@@ -85,8 +98,19 @@ struct CvCargo_ {
 	t radius{(t)0.0};
 	CargoColor color{CargoColor::NONE};
 
+	inline const CvCargo_<t>& rescale(double s) {
+		this->center *= s;
+		this->radius *= s;
+		return *this;
+	}
+	inline const CvCargo_<t>& operator*=(double s) { return this->rescale(s); }
+
+	inline bool operator<(const CvCargo_<t>& c) { return this->radius < c.radius; }		// compares relative size
+	inline bool operator>(const CvCargo_<t>& c) { return this->radius > c.radius; }		// '''
+
 };
 typedef CvCargo_<>	CvCargo;
+
 
 template<CargoColor color = CargoColor::NONE>
 class Cargo : public vs2::UniqueTarget<Cargo<color>> {
@@ -100,14 +124,15 @@ public:
 		cv::Point3f(0.f, -4.75f, 0.f)
 	};
 	inline static const std::array<const char*, 4> name_map{
-		"Extra Cargo #",
+		"Unkn Cargo #",
 		"Red Cargo #",
 		"Blue Cargo #",
-		"Random Cargo #"
+		"Rndm Cargo #"
 	};
 
 	Cargo() : vs2::UniqueTarget<This_t>(name_map[~color]) {}
 	Cargo(const Cargo&) = delete;
+	Cargo(Cargo&&) = default;
 
 	template<typename t = float>
 	void update(const CvCargo_<t>& v, cv::InputArray matx, cv::InputArray dist);
@@ -117,26 +142,35 @@ public:
 typedef Cargo<CargoColor::RED>	RedCargo;
 typedef Cargo<CargoColor::BLUE>	BlueCargo;
 
+
+
 class CargoPipeline : public vs2::VPipeline<CargoPipeline> {
 public:
-	CargoPipeline() = default;
+	CargoPipeline();
 	CargoPipeline(const CargoPipeline&) = delete;
 
 	void process(cv::Mat& io_frame) override;
 
 protected:
-	template<vs2::BGR base, uint8_t a, uint8_t b, uint8_t thresh>
+	template<vs2::BGR base, int a = 50, int b = 50, int g = 0, int tr = 30>
 	class CargoFilter {
 		friend class CargoPipeline;
 	public:
-		void threshold(const std::array<cv::Mat, 3>& channels, cv::Mat& o_frame);
+		void threshold(const std::array<cv::Mat, 3>& channels);
 
 	protected:
+		constexpr inline static float
+			CONTOUR_AREA_THRESH = 500.f,
+			MIN_CIRCULARITY = 0.8f;
+
 		cv::Mat binary;
 		std::vector<std::vector<cv::Point2i> > contours;
 		std::vector<cv::Point2i> point_buff;
-		double area_largest, area_buff, max_val;
-		int16_t target_idx;
+		double
+			alpha{a / 100.0},
+			beta{b / 100.0},
+			gamma{g / 100.0},
+			thresh{tr / 100.0};
 
 		std::vector<CvCargo> objects;
 
@@ -144,12 +178,95 @@ protected:
 
 	std::array<cv::Mat, 3> channels;
 	cv::Mat buffer;
+	size_t scale{1};
 
-template<CargoColor key, vs2::BGR base, uint8_t a, uint8_t b, uint8_t thresh>
-using CargoPair = std::pair<std::vector<Cargo<key> >, CargoFilter<base, a, b, thresh> >;
+	template<
+		CargoColor key,
+		vs2::BGR base,
+		int a, int b, int g, int tr
+	> struct CargoPair {
+		constexpr static inline vs2::BGR B_CLR{ base };
 
-	CargoPair<CargoColor::RED, vs2::BGR::RED, 100, 100, 30> red;
-	CargoPair<CargoColor::BLUE, vs2::BGR::BLUE, 20, 100, 15> blue;
+		std::vector<Cargo<key> > targets;
+		CargoFilter<base, a, b, g, tr> proc;
+	};
+
+	CargoPair<CargoColor::RED, vs2::BGR::RED, 100, 100, 0, 30> red;
+	CargoPair<CargoColor::BLUE, vs2::BGR::BLUE, 20, 100, 0, 15> blue;
 
 
 };
+
+
+
+
+
+
+
+
+
+
+
+template<CargoColor color>
+template<typename t>
+void Cargo<color>::update(const CvCargo_<t>& v, cv::InputArray matx, cv::InputArray dist) {
+	cv::Mat1f tvec, rvec;
+	std::array<cv::Point2f, 4> outline{
+		cv::Point2f(v.center.x - v.radius, v.center.y),
+		cv::Point2f(v.center.x, v.center.y - v.radius),
+		cv::Point2f(v.center.x + v.radius, v.center.y),
+		cv::Point2f(v.center.x, v.center.y + v.radius)
+	};
+	cv::solvePnP(
+		this->world_coords, outline,
+		matx, dist, rvec, tvec
+	);
+	// something happening here >> (crashing w/ 100% thread utilization)
+	this->setPos(tvec[0][0], tvec[1][0], tvec[2][0]);
+	this->setAngle(
+		atan2(tvec[1][0], tvec[2][0]) * -180/CV_PI,
+		atan2(tvec[0][0], tvec[2][0]) * -180/CV_PI
+	);
+	this->setDist(
+		sqrt(pow(tvec[0][0], 2) + pow(tvec[1][0], 2) + pow(tvec[2][0], 2))
+	);
+	//this->setValid();
+}
+
+template<vs2::BGR base, int a, int b, int g, int tr>
+void CargoPipeline::CargoFilter<base, a, b, g, tr>::threshold(const std::array<cv::Mat, 3>& channels) {
+
+	cv::addWeighted(
+		channels[vs2::weights_map[~base][0]], this->alpha,
+		channels[vs2::weights_map[~base][1]], this->beta,
+		this->gamma, this->binary
+	);
+	cv::subtract(channels[~base], this->binary, this->binary);
+	double maxv;
+	cv::minMaxIdx(this->binary, nullptr, &maxv);
+	if((int)maxv && (int)this->thresh) {
+		memcpy_threshold_asm(
+			this->binary.data, this->binary.data,
+			this->binary.size().area(), maxv * this->thresh
+		);
+	}
+
+	this->contours.clear();
+	cv::findContours(this->binary, this->contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+
+	this->objects.clear();
+
+	cv::Point2f _center;
+	float _radius;
+	for(size_t i = 0; i < this->contours.size(); i++) {
+		if(cv::contourArea(this->contours[i]) > this->binary.size().area() / CONTOUR_AREA_THRESH) {
+			cv::minEnclosingCircle(this->contours[i], _center, _radius);
+			cv::convexHull(this->contours[i], this->point_buff);
+			if(cv::contourArea(this->point_buff) / (CV_PI * pow(_radius, 2)) > MIN_CIRCULARITY) {
+				this->objects.emplace_back(_center, _radius);
+			}
+			// draw contours
+		}
+	}
+
+}

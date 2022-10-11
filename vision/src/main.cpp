@@ -1,22 +1,14 @@
 #include <vector>
-#include <thread>
-#include <chrono>
 
-#include <cameraserver/CameraServer.h>
-
-#include "cpp-tools/src/resources.h"
 #include "cpp-tools/src/sighandle.h"
 #include "cpp-tools/src/timing.h"
-//#include "cpp-tools/src/types.h"
-//#include "cpp-tools/src/server/server.h"
 
-#include "core/visioncamera.h"
-#include "core/vision.h"
-//#include "core/httpnetworktables.h"
-#include "core/visionserver2.h"
-#include "core/tfmodel.h"
+#include <core/visionserver2.h>
+#include <core/visioncamera.h>
+#include <core/config.h>
 
 #include "rapidreact2.h"
+#include "calibrations.h"
 
 
 StopWatch runtime("Runtime", &std::cout, 0);
@@ -29,30 +21,20 @@ int main(int argc, char* argv[]) {
 
 	std::vector<VisionCamera> cameras;
 
-	if(argc > 1 && readConfig(cameras, argv[1])) {}
-	else if(readConfig(cameras)) {}
+	if(argc > 1 && initNT(argv[1]) && createCameras(cameras, calibrations, argv[1])) {}
+	else if(initNT() && createCameras(cameras, calibrations)) {}
 	else { return EXIT_FAILURE; }
 
 	vs2::VisionServer::Init();
 	vs2::VisionServer::addCameras(std::move(cameras));
-	vs2::VisionServer::addStreams(3);
+	vs2::VisionServer::addStreams(1);
 	UHPipeline uh_pipe(vs2::BGR::BLUE);
-	AxonRunner a(2);
-	vs2::VisionServer::addPipelines({&uh_pipe, &a});
+	CargoPipeline c_pipe;
+	vs2::VisionServer::addPipelines({&uh_pipe, &c_pipe});
 	vs2::VisionServer::compensate();
 	vs2::VisionServer::run(60);
 	atexit(vs2::VisionServer::stopExit);
 
-
-
-	//HttpServer hserver(
-	// 	&std::cout,
-	// 	"/home/pi",
-	// 	nullptr,
-	// 	Version::HTTP_1_1,
-	// 	"81"	// the main WPILibPi page uses port 80
-	// );
-	//hserver.serve<HttpNTables>();
 }
 
 // LIST OF THINGS
@@ -74,4 +56,9 @@ x Multiple VisionServer processing instances, data protection/management -> vect
 x TensorFlow models
 x VS2 Targets/ntables output
 x Coral Edge TPU delegate support
+- Aruco/AprilTag-specific features?
+- >> LOGGING <<
+- Improve docs
+- Characterize and optimize ftime/threading
+- More robust/dynamic config & calibration options
 */

@@ -1,6 +1,6 @@
 # This is a basic workflow to build robot code.
 
-name: Build Robot Code
+name: CI
 
 # Controls when the action will run. Triggers the workflow on push or pull request
 # events but only for the main branch.
@@ -24,7 +24,7 @@ jobs:
     steps:
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@main
       with:
         submodules: recursive
 

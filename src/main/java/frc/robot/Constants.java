@@ -143,12 +143,12 @@ public final class Constants {
 	public static final Runnable	// these functions contain all configs that should be applied before each vision usecase
 		vision_driving = ()->{
 			VisionServer.setProcessingEnabled(false);
-			VisionServer.setStatistics(false);
+			//VisionServer.setStatistics(false);
 			VisionServer.applyCameraPreset(driving_camera_preset);
 		},
 		vision_cargo = ()->{
 			VisionServer.setProcessingEnabled(true);
-			VisionServer.setStatistics(true);
+			//VisionServer.setStatistics(true);
 			VisionServer.applyCameraPreset(
 				DriverStation.getAlliance() == Alliance.Blue ? cargo_blue_camera_preset : cargo_red_camera_preset
 			);
@@ -157,7 +157,7 @@ public final class Constants {
 		},
 		vision_hub = ()->{
 			VisionServer.setProcessingEnabled(true);
-			VisionServer.setStatistics(true);
+			//VisionServer.setStatistics(true);
 			VisionServer.applyCameraPreset(hub_camera_preset);
 			RapidReactVision.Cameras.HUB.setActive();
 		}
