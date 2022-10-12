@@ -210,15 +210,26 @@ void CargoPipeline::process(cv::Mat& io_frame) {
 		this->red.proc.threshold(this->channels);
 		std::sort(this->red.proc.objects.begin(), this->red.proc.objects.end(), std::greater<>());	// sort results by size
 		// temporal analysis here
-		this->red.targets.resize(this->red.proc.objects.size());
-		for(size_t i = 0; i < this->red.proc.objects.size(); i++) {
-			CvCargo& target = this->red.proc.objects[i];
-			this->red.targets[i].update(
-				(target *= this->scale),
-				this->getSrcMatrix(), this->getSrcDistort()
-			);
-			// if debug
-			cv::circle(io_frame, target.center, target.radius, ::markup_map[~this->red.B_CLR][0]);
+		if(this->red.proc.objects.size() > 0) {
+			this->red.targets.resize(this->red.proc.objects.size());
+			cv::Mat1f tvec, rvec;
+			std::array<cv::Point2f, 4> outline;
+			for(size_t i = 0; i < this->red.proc.objects.size(); i++) {
+				CvCargo& v = this->red.proc.objects[i];
+				outline = {
+					cv::Point2f(v.center.x - v.radius, v.center.y),
+					cv::Point2f(v.center.x, v.center.y - v.radius),
+					cv::Point2f(v.center.x + v.radius, v.center.y),
+					cv::Point2f(v.center.x, v.center.y + v.radius)
+				};
+				cv::solvePnP(
+					Cargo<>::world_coords, outline, rvec, tvec,
+					this->getSrcMatrix(), this->getSrcDistort()
+				);
+				this->red.targets[i].update(reinterpret_cast<float*>(tvec.data));
+				// if debug
+				cv::circle(io_frame, v.center, v.radius, ::markup_map[~this->red.B_CLR][0]);
+			}
 		}
 		if(_contours) {
 			::rescale(this->red.proc.contours, this->scale);
@@ -231,15 +242,26 @@ void CargoPipeline::process(cv::Mat& io_frame) {
 		this->blue.proc.threshold(this->channels);
 		std::sort(this->blue.proc.objects.begin(), this->blue.proc.objects.end(), std::greater<>());
 		// temporal analysis here
-		this->blue.targets.resize(this->blue.proc.objects.size());
-		for(size_t i = 0; i < this->blue.proc.objects.size(); i++) {
-			CvCargo& target = this->blue.proc.objects[i];
-			this->blue.targets[i].update(
-				(target *= this->scale),
-				this->getSrcMatrix(), this->getSrcDistort()
-			);
-			// if debug
-			cv::circle(io_frame, target.center, target.radius, ::markup_map[~this->blue.B_CLR][1]);
+		if(this->blue.proc.objects.size() > 0) {
+			this->blue.targets.resize(this->red.proc.objects.size());
+			cv::Mat1f tvec, rvec;
+			std::array<cv::Point2f, 4> outline;
+			for(size_t i = 0; i < this->blue.proc.objects.size(); i++) {
+				CvCargo& v = this->blue.proc.objects[i];
+				outline = {
+					cv::Point2f(v.center.x - v.radius, v.center.y),
+					cv::Point2f(v.center.x, v.center.y - v.radius),
+					cv::Point2f(v.center.x + v.radius, v.center.y),
+					cv::Point2f(v.center.x, v.center.y + v.radius)
+				};
+				cv::solvePnP(
+					Cargo<>::world_coords, outline, rvec, tvec,
+					this->getSrcMatrix(), this->getSrcDistort()
+				);
+				this->blue.targets[i].update(reinterpret_cast<float*>(tvec.data));
+				// if debug
+				cv::circle(io_frame, v.center, v.radius, ::markup_map[~this->blue.B_CLR][0]);
+			}
 		}
 		if(_contours) {
 			::rescale(this->blue.proc.contours, this->scale);

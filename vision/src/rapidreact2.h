@@ -134,8 +134,8 @@ public:
 	Cargo(const Cargo&) = delete;
 	Cargo(Cargo&&) = default;
 
-	template<typename t = float>
-	void update(const CvCargo_<t>& v, cv::InputArray matx, cv::InputArray dist);
+	template<typename t = float> inline void update(t* tvec) { this->update<t>(tvec[0], tvec[1], tvec[2]); }
+	template<typename t = float> void update(t x, t y, t z);
 
 
 };
@@ -209,27 +209,11 @@ protected:
 
 template<CargoColor color>
 template<typename t>
-void Cargo<color>::update(const CvCargo_<t>& v, cv::InputArray matx, cv::InputArray dist) {
-	cv::Mat1f tvec, rvec;
-	std::array<cv::Point2f, 4> outline{
-		cv::Point2f(v.center.x - v.radius, v.center.y),
-		cv::Point2f(v.center.x, v.center.y - v.radius),
-		cv::Point2f(v.center.x + v.radius, v.center.y),
-		cv::Point2f(v.center.x, v.center.y + v.radius)
-	};
-	cv::solvePnP(
-		this->world_coords, outline,
-		matx, dist, rvec, tvec
-	);
+void Cargo<color>::update(t x, t y, t z) {
 	// something happening here >> (crashing w/ 100% thread utilization)
-	this->setPos(tvec[0][0], tvec[1][0], tvec[2][0]);
-	this->setAngle(
-		atan2(tvec[1][0], tvec[2][0]) * -180/CV_PI,
-		atan2(tvec[0][0], tvec[2][0]) * -180/CV_PI
-	);
-	this->setDist(
-		sqrt(pow(tvec[0][0], 2) + pow(tvec[1][0], 2) + pow(tvec[2][0], 2))
-	);
+	this->setPos(x, y, z);
+	this->setAngle( (atan2(y, z) * -180/CV_PI), (atan2(x, z) * -180/CV_PI) );
+	this->setDist( sqrt(pow(x, 2) + pow(y, 2) + pow(z, 2)) );
 	//this->setValid();
 }
 
