@@ -169,7 +169,7 @@ protected:
 		double
 			alpha{a / 100.0},
 			beta{b / 100.0},
-			gamma{g / 100.0},
+			gamma{g / 100.0 * 255.0},
 			thresh{tr / 100.0};
 
 		std::vector<CvCargo> objects;
@@ -228,7 +228,7 @@ void CargoPipeline::CargoFilter<base, a, b, g, tr>::threshold(const std::array<c
 	cv::subtract(channels[~base], this->binary, this->binary);
 	double maxv;
 	cv::minMaxIdx(this->binary, nullptr, &maxv);
-	if((int)maxv && (int)this->thresh) {
+	if((int)maxv && this->thresh > 0) {
 		memcpy_threshold_asm(
 			this->binary.data, this->binary.data,
 			this->binary.size().area(), maxv * this->thresh
