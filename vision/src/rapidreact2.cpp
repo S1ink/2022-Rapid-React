@@ -200,7 +200,8 @@ void CargoPipeline::process(cv::Mat& io_frame) {
 		for(size_t i = 0; i < 3; i++) {
 			this->channels[i] = cv::Mat{fsz, CV_8UC1};
 		}
-		this->red.proc.binary = this->blue.proc.binary = cv::Mat{fsz, CV_8UC1};
+		this->red.proc.binary = cv::Mat{fsz, CV_8UC1};
+		this->blue.proc.binary = cv::Mat{fsz, CV_8UC1};
 	}
 
 	cv::resize(io_frame, this->buffer, fsz);
@@ -246,7 +247,7 @@ void CargoPipeline::process(cv::Mat& io_frame) {
 		std::sort(this->blue.proc.objects.begin(), this->blue.proc.objects.end(), std::greater<>());
 		// temporal analysis here
 		if(this->blue.proc.objects.size() > 0) {
-			this->blue.targets.resize(this->red.proc.objects.size());
+			this->blue.targets.resize(this->blue.proc.objects.size());
 			cv::Mat1f tvec, rvec;
 			std::array<cv::Point2f, 4> outline;
 			for(size_t i = 0; i < this->blue.proc.objects.size(); i++) {
@@ -274,9 +275,13 @@ void CargoPipeline::process(cv::Mat& io_frame) {
 		for(BlueCargo& target : this->blue.targets) { target.setExpired(); }
 	}
 
-	if(_threshold) {
-		cv::bitwise_or(this->blue.proc.binary, this->red.proc.binary, this->red.proc.binary);
-		cv::cvtColor(this->red.proc.binary, this->buffer, cv::COLOR_GRAY2BGR);
+	if(_threshold && (_red || _blue)) {
+		if(_red && _blue) {
+			memcpy_bitwise_or_asm(this->red.proc.binary.data, this->blue.proc.binary.data, this->red.proc.binary.data, fsz.area());
+			cv::cvtColor(this->red.proc.binary, this->buffer, cv::COLOR_GRAY2BGR);
+		} else {
+			cv::cvtColor((_blue ? this->blue.proc.binary : this->red.proc.binary), this->buffer, cv::COLOR_GRAY2BGR);
+		}
 		cv::resize(this->buffer, io_frame, io_frame.size(), cv::INTER_NEAREST);
 	}
 	cv::bitwise_or(annotations, io_frame, io_frame);

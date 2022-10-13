@@ -226,6 +226,14 @@ void CargoPipeline::CargoFilter<base, a, b, g, tr>::threshold(const std::array<c
 		this->gamma, this->binary
 	);
 	cv::subtract(channels[~base], this->binary, this->binary);
+	// memcpy_compare3_add_asm(
+	// 	channels[~base].data,
+	// 	channels[vs2::weights_map[~base][0]].data,
+	// 	channels[vs2::weights_map[~base][1]].data,
+	// 	this->binary.data,
+	// 	this->binary.data,
+	// 	this->binary.size().area()
+	// );
 	double maxv;
 	cv::minMaxIdx(this->binary, nullptr, &maxv);
 	if((int)maxv && this->thresh > 0) {

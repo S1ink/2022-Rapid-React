@@ -40,7 +40,7 @@
             ],
             "content": {
               "_type": "Camera Stream",
-              "_source0": "camera_server://Vision Stream",
+              "_source0": "camera_server://Upper Hub Pipeline 1",
               "_title": "Vision Stream",
               "Crosshair/Show crosshair": true,
               "Crosshair/Crosshair color": "#FFFFFFFF",
@@ -207,8 +207,8 @@
     }
   ],
   "windowGeometry": {
-    "x": 1912.0,
-    "y": -8.0,
+    "x": 281.0,
+    "y": 75.0,
     "width": 1936.0,
     "height": 1096.0
   }
