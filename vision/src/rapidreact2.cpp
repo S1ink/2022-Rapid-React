@@ -282,7 +282,7 @@ void CargoPipeline::process(cv::Mat& io_frame) {
 		} else {
 			cv::cvtColor((_blue ? this->blue.proc.binary : this->red.proc.binary), this->buffer, cv::COLOR_GRAY2BGR);
 		}
-		cv::resize(this->buffer, io_frame, io_frame.size(), cv::INTER_NEAREST);
+		cv::resize(this->buffer, io_frame, io_frame.size(), cv::INTER_LINEAR);
 	}
 	cv::bitwise_or(annotations, io_frame, io_frame);
 

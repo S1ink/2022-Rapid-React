@@ -220,12 +220,22 @@ void Cargo<color>::update(t x, t y, t z) {
 template<vs2::BGR base, int a, int b, int g, int tr>
 void CargoPipeline::CargoFilter<base, a, b, g, tr>::threshold(const std::array<cv::Mat, 3>& channels) {
 
-	cv::addWeighted(
-		channels[vs2::weights_map[~base][0]], this->alpha,
-		channels[vs2::weights_map[~base][1]], this->beta,
-		this->gamma, this->binary
+	// cv::addWeighted(
+	// 	channels[vs2::weights_map[~base][0]], this->alpha,
+	// 	channels[vs2::weights_map[~base][1]], this->beta,
+	// 	this->gamma, this->binary
+	// );
+	// cv::subtract(channels[~base], this->binary, this->binary);
+	memcpy_wst_asm(	// ~300% performance increase vs the above
+		channels[~base].data,
+		channels[vs2::weights_map[~base][0]].data,
+		channels[vs2::weights_map[~base][1]].data,
+		this->binary.data,
+		this->binary.size().area(),
+		(uint8_t)(this->alpha * 255),
+		(uint8_t)(this->beta * 255),
+		(uint8_t)this->gamma
 	);
-	cv::subtract(channels[~base], this->binary, this->binary);
 	// memcpy_compare3_add_asm(
 	// 	channels[~base].data,
 	// 	channels[vs2::weights_map[~base][0]].data,
