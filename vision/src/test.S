@@ -1,5 +1,5 @@
 .global test_add6_asm
-.global test_c3_add_asm
+//.global test_c3_add_asm
 
 
 test_add6_asm:

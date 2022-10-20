@@ -22,48 +22,59 @@ extern "C" int32_t test_add6_asm(
 );
 
 void perftest() {
-	cv::Mat binary{2160, 1440, CV_8UC1};
-	std::array<cv::Mat, 3> channels{cv::Mat(2160, 1440, CV_8UC1), cv::Mat(2160, 1440, CV_8UC1), cv::Mat(2160, 1440, CV_8UC1)};
-	for(cv::Mat& f : channels) {
-		for(size_t i = 0; i < f.size().area() * f.channels(); i++) {
-			f.data[i] = rand() % 255;
-		}
+	constexpr size_t TEST_FRAMES{100};
+	const cv::Size fsize{640, 480};
+
+	cv::Mat frame{fsize, CV_8UC3}, binary{fsize, CV_8UC1};
+	std::array<cv::Mat, 3> channels{cv::Mat(fsize, CV_8UC1), cv::Mat(fsize, CV_8UC1), cv::Mat(fsize, CV_8UC1)};
+	for(size_t i = 0; i < frame.size().area() * frame.channels(); i++) {
+		frame.data[i] = rand() % 255;
 	}
 
-	constexpr size_t TEST_FRAMES = 100;
+	std::cout << "FSize: " << fsize << " --> IsContinuous: " << frame.isContinuous() << std::endl;
+	cv::imwrite("/mnt/usb0/frame.jpg", frame);
+
+	//cv::split(frame, channels);
 
 	HRC::time_point beg, end;
 	beg = HRC::now();
 	for(size_t i = 0; i < TEST_FRAMES; i++) {
+		cv::split(frame, channels);
 		cv::addWeighted(
-			channels[1], 0.5,
-			channels[2], 0.5,
+			channels[2], 0.8,
+			channels[0], 0.8,
 			50, binary
 		);
-		cv::subtract(channels[0], binary, binary);
+		cv::subtract(channels[1], binary, binary);
 	}
 	end = HRC::now();
-	std::cout << "CVx100 (ms): " << (end - beg).count() / 1e6 << std::endl;
+	std::cout << "CVx" << TEST_FRAMES << " (ms): " << (end - beg).count() / 1e6 << std::endl;
 	cv::imwrite("/mnt/usb0/cv.jpg", binary);
 	beg = HRC::now();
 	for(size_t i = 0; i < TEST_FRAMES; i++) {
-		memcpy_wst_asm(
-			channels[0].data,
-			channels[1].data,
-			channels[2].data,
+		// memcpy_wst_asm(
+		// 	channels[1].data,
+		// 	channels[2].data,
+		// 	channels[0].data,
+		// 	binary.data,
+		// 	fsize.area(),
+		// 	(uint8_t)(255 * 0.5),
+		// 	(uint8_t)(255 * 0.5),
+		// 	50
+		// );
+		memcpy_split_wst_asm(
+			frame.data,
 			binary.data,
-			binary.size().area(),
-			(uint8_t)(255 * 0.5),
-			(uint8_t)(255 * 0.5),
-			50U
+			fsize.area(),
+			1,
+			(uint8_t)(255 * 0.8),
+			(uint8_t)(255 * 0.8),
+			50
 		);
 	}
 	end = HRC::now();
-	std::cout << "ASMx100 (ms): " << (end - beg).count() / 1e6 << std::endl;
+	std::cout << "ASMx" << TEST_FRAMES << " (ms): " << (end - beg).count() / 1e6 << std::endl;
 	cv::imwrite("/mnt/usb0/asm.jpg", binary);
-	cv::Mat frame{2160, 1440, CV_8UC3};
-	cv::merge(channels, frame);
-	cv::imwrite("/mnt/usb0/frame.png", frame);
 }
 
 StopWatch runtime("Runtime", &std::cout, 0);
@@ -74,21 +85,23 @@ int main(int argc, char* argv[]) {
 	SigHandle::get();
 	atexit(on_exit);
 
-	std::vector<VisionCamera> cameras;
+	perftest();
 
-	if(argc > 1 && initNT(argv[1]) && createCameras(cameras, calibrations, argv[1])) {}
-	else if(initNT() && createCameras(cameras, calibrations)) {}
-	else { return EXIT_FAILURE; }
+	// std::vector<VisionCamera> cameras;
 
-	vs2::VisionServer::Init();
-	vs2::VisionServer::addCameras(std::move(cameras));
-	vs2::VisionServer::addStreams(1);
-	UHPipeline uh_pipe(vs2::BGR::BLUE);
-	CargoPipeline c_pipe;
-	vs2::VisionServer::addPipelines({&uh_pipe, &c_pipe});
-	vs2::VisionServer::compensate();
-	vs2::VisionServer::run(60);
-	atexit(vs2::VisionServer::stopExit);
+	// if(argc > 1 && initNT(argv[1]) && createCameras(cameras, calibrations, argv[1])) {}
+	// else if(initNT() && createCameras(cameras, calibrations)) {}
+	// else { return EXIT_FAILURE; }
+
+	// vs2::VisionServer::Init();
+	// vs2::VisionServer::addCameras(std::move(cameras));
+	// vs2::VisionServer::addStreams(1);
+	// UHPipeline uh_pipe(vs2::BGR::BLUE);
+	// CargoPipeline c_pipe;
+	// vs2::VisionServer::addPipelines({&uh_pipe, &c_pipe});
+	// vs2::VisionServer::compensate();
+	// vs2::VisionServer::run(60);
+	// atexit(vs2::VisionServer::stopExit);
 
 }
 
