@@ -52,6 +52,7 @@ void perftest() {
 	cv::imwrite("/mnt/usb0/cv.jpg", binary);
 	beg = HRC::now();
 	for(size_t i = 0; i < TEST_FRAMES; i++) {
+		//cv::split(frame, channels);
 		// memcpy_wst_asm(
 		// 	channels[1].data,
 		// 	channels[2].data,
@@ -77,6 +78,8 @@ void perftest() {
 	cv::imwrite("/mnt/usb0/asm.jpg", binary);
 }
 
+class ArucoTest;
+
 StopWatch runtime("Runtime", &std::cout, 0);
 void on_exit() { runtime.end(); }
 
@@ -85,23 +88,24 @@ int main(int argc, char* argv[]) {
 	SigHandle::get();
 	atexit(on_exit);
 
-	perftest();
+	//perftest();
 
-	// std::vector<VisionCamera> cameras;
+	std::vector<VisionCamera> cameras;
 
-	// if(argc > 1 && initNT(argv[1]) && createCameras(cameras, calibrations, argv[1])) {}
-	// else if(initNT() && createCameras(cameras, calibrations)) {}
-	// else { return EXIT_FAILURE; }
+	if(argc > 1 && initNT(argv[1]) && createCameras(cameras, calibrations, argv[1])) {}
+	else if(initNT() && createCameras(cameras, calibrations)) {}
+	else { return EXIT_FAILURE; }
 
-	// vs2::VisionServer::Init();
-	// vs2::VisionServer::addCameras(std::move(cameras));
-	// vs2::VisionServer::addStreams(1);
-	// UHPipeline uh_pipe(vs2::BGR::BLUE);
-	// CargoPipeline c_pipe;
-	// vs2::VisionServer::addPipelines({&uh_pipe, &c_pipe});
-	// vs2::VisionServer::compensate();
-	// vs2::VisionServer::run(60);
-	// atexit(vs2::VisionServer::stopExit);
+	vs2::VisionServer::Init();
+	vs2::VisionServer::addCameras(std::move(cameras));
+	vs2::VisionServer::addStreams(1);
+	//UHPipeline uh_pipe(vs2::BGR::BLUE);
+	//CargoPipeline c_pipe;
+	//vs2::VisionServer::addPipelines({&uh_pipe, &c_pipe});
+	vs2::VisionServer::addPipeline<ArucoTest>();
+	vs2::VisionServer::compensate();
+	vs2::VisionServer::run(60);
+	atexit(vs2::VisionServer::stopExit);
 
 }
 
@@ -130,3 +134,45 @@ x Coral Edge TPU delegate support
 - Characterize and optimize ftime/threading
 - More robust/dynamic config & calibration options
 */
+
+
+
+#include <opencv2/aruco.hpp>
+#include <core/vision.h>
+
+
+class ArucoTest : public vs2::VPipeline<ArucoTest> {
+public:
+	inline ArucoTest() : VPipeline("Aruco Test Pipeline") {}
+	void process(cv::Mat& io_frame) override {
+		cv::Size2i fsz = io_frame.size() / (int)SCALE;
+		if(this->buffer.size() != fsz) {
+			this->buffer = cv::Mat(fsz, CV_8UC3);
+		}
+		cv::resize(io_frame, this->buffer, fsz);
+		cv::aruco::detectMarkers(this->buffer, this->markers, this->corners, this->ids);
+		rescale(this->corners, SCALE);
+		cv::aruco::drawDetectedMarkers(io_frame, this->corners, this->ids);
+	}
+
+
+	constexpr static inline cv::aruco::PREDEFINED_DICTIONARY_NAME
+		FRC_DICT = cv::aruco::DICT_APRILTAG_36h11,
+		SIMPLE_DICT = cv::aruco::DICT_4X4_50
+	;
+	constexpr static inline size_t
+		SCALE{2};
+	// constexpr static inline bool
+	// 	REFINE_DETECTIONS = true;
+
+protected:
+	cv::Ptr<cv::aruco::Dictionary> markers{
+		cv::aruco::getPredefinedDictionary(FRC_DICT)
+	};
+
+	std::vector<std::vector<cv::Point2f> > corners;
+	std::vector<int32_t> ids;
+	cv::Mat buffer;
+
+
+};
