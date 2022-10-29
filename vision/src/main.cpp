@@ -2,7 +2,7 @@
 
 #include "cpp-tools/src/sighandle.h"
 #include "cpp-tools/src/timing.h"
-
+//#define OPENCV_TRAITS_ENABLE_DEPRECATED
 #include <core/visionserver2.h>
 #include <core/visioncamera.h>
 #include <core/config.h>
@@ -155,14 +155,25 @@ class ArucoTest : public vs2::VPipeline<ArucoTest> {
 public:
 	inline ArucoTest() : VPipeline("Aruco Test Pipeline") {}
 	void process(cv::Mat& io_frame) override {
+		this->corners.clear();
+		this->ids.clear();
 		cv::Size2i fsz = io_frame.size() / (int)SCALE;
 		if(this->buffer.size() != fsz) {
 			this->buffer = cv::Mat(fsz, CV_8UC3);
 		}
 		cv::resize(io_frame, this->buffer, fsz);
 		cv::aruco::detectMarkers(this->buffer, this->markers, this->corners, this->ids);
-		rescale(this->corners, SCALE);
-		cv::aruco::drawDetectedMarkers(io_frame, this->corners, this->ids);
+		if(this->corners.size() > 0) {
+			rescale(this->corners, SCALE);
+			if(cv::aruco::estimatePoseBoard(
+				this->corners, this->ids, FIELD_2022,
+				this->getSrcMatrix(), this->getSrcDistort(),
+				this->rvec, this->tvec
+			)) {
+				cv::aruco::drawAxis(io_frame, this->getSrcMatrix(), this->getSrcDistort(), this->rvec, this->tvec, 100.f);
+			}
+			cv::aruco::drawDetectedMarkers(io_frame, this->corners, this->ids);
+		}
 	}
 
 
@@ -178,7 +189,7 @@ public:
 	static inline const cv::Ptr<cv::aruco::Board>	// the 2022 (nonofficial) field has 24 markers - link to source above
 		FIELD_2022{ cv::aruco::Board::create(
 			// calculations and formatting: https://docs.google.com/spreadsheets/d/1zpj37KxVP_r6md_0VjLPmQ9h4aVExXe4bx78hdGrro8/edit?usp=sharing
-			std::array<std::array<cv::Point3f, 4>, 24>{ {
+			std::vector<std::vector<cv::Point3f>>{ {
 				{
 					cv::Point3f(-0.139,295.133,38.126),
 					cv::Point3f(-0.139,301.633,38.126),
@@ -285,15 +296,15 @@ public:
 					cv::Point3f(302.524964221264,166.762635833808,92.2838184339138),
 					cv::Point3f(304.854355893308,172.83090860604,92.2838184339138)
 				}, {
-					cv::Point3f(315.879964221264,136.765635833808,98.0881815660862),
-					cv::Point3f(318.209355893308,142.83390860604,98.0881815660862),
-					cv::Point3f(315.478035778736,143.882364166192,92.2838184339138),
-					cv::Point3f(313.148644106692,137.814091393961,92.2838184339138)
+					cv::Point3f(312.120635833808,140.123035778737,98.0881815660862),
+					cv::Point3f(318.18890860604,137.793644106692,98.0881815660862),
+					cv::Point3f(319.237364166192,140.524964221264,92.2838184339138),
+					cv::Point3f(313.16909139396,142.854355893308,92.2838184339138)
 				}, {
-					cv::Point3f(342.117635833808,153.478035778737,98.0881815660862),
-					cv::Point3f(348.18590860604,151.148644106692,98.0881815660862),
-					cv::Point3f(349.234364166192,153.879964221264,92.2838184339138),
-					cv::Point3f(343.166091393961,156.209355893308,92.2838184339138)
+					cv::Point3f(345.876964221264,150.120635833808,98.0881815660862),
+					cv::Point3f(348.206355893308,156.18890860604,98.0881815660862),
+					cv::Point3f(345.475035778737,157.237364166192,92.2838184339138),
+					cv::Point3f(343.145644106692,151.169091393961,92.2838184339138)
 				}, {
 					cv::Point3f(335.879364166192,183.876964221263,98.0881815660862),
 					cv::Point3f(329.811091393961,186.206355893308,98.0881815660862),
@@ -302,7 +313,7 @@ public:
 				}
 			} },
 			cv::aruco::getPredefinedDictionary(FRC_DICT),
-			std::array<uint32_t, 24>{
+			std::array<int32_t, 24>{
 				0, 1, 2, 3, 4, 5, 6, 7,
 				10, 11, 12, 13, 14, 15, 16, 17,
 				40, 41, 42, 43,
@@ -317,6 +328,7 @@ protected:
 
 	std::vector<std::vector<cv::Point2f> > corners;
 	std::vector<int32_t> ids;
+	std::array<float, 3> tvec, rvec;
 	cv::Mat buffer;
 
 
