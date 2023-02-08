@@ -11,7 +11,7 @@
 #include "core/visionserver2.h"
 #include "core/extensions.h"
 #include "core/target.h"
-#include "core/mem.h"
+#include "core/neon.h"
 
 
 // UPPER HUB DETECTION
@@ -124,10 +124,10 @@ public:
 		cv::Point3f(0.f, -4.75f, 0.f)
 	};
 	inline static const std::array<const char*, 4> name_map{
-		"Unkn Cargo #",
-		"Red Cargo #",
-		"Blue Cargo #",
-		"Rndm Cargo #"
+		"Unkn Cargo",
+		"Red Cargo",
+		"Blue Cargo",
+		"Rndm Cargo"
 	};
 
 	Cargo() : vs2::UniqueTarget<This_t>(name_map[~color]) {}
@@ -210,11 +210,10 @@ protected:
 template<CargoColor color>
 template<typename t>
 void Cargo<color>::update(t x, t y, t z) {
-	// something happening here >> (crashing w/ 100% thread utilization)
 	this->setPos(x, y, z);
 	this->setAngle( (atan2(y, z) * -180/CV_PI), (atan2(x, z) * -180/CV_PI) );
 	this->setDist( sqrt(pow(x, 2) + pow(y, 2) + pow(z, 2)) );
-	//this->setValid();
+	this->setValid();
 }
 
 template<vs2::BGR base, int a, int b, int g, int tr>

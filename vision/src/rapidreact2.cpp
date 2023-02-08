@@ -3,7 +3,6 @@
 #include <algorithm>
 
 #include "core/vision.h"
-#include "core/mem.h"
 
 
 UHPipeline::UHPipeline(vs2::BGR c) :
@@ -133,10 +132,11 @@ void UHPipeline::process(cv::Mat& io_frame) {
 					acos(this->tvec[2][0] / sqrt(pow(this->tvec[0][0], 2) + pow(this->tvec[2][0], 2)))
 						* 180 / CV_PI * sgn(this->tvec[0][0])
 				);
+				this->target.setValid();
 
 				// draw 3d debug
 
-				break;
+				return;
 
 			} else {
 				this->in_range.clear();
@@ -150,6 +150,7 @@ void UHPipeline::process(cv::Mat& io_frame) {
 
 		}
 	}
+	this->target.setExpired();
 
 }
 
@@ -204,7 +205,7 @@ void CargoPipeline::process(cv::Mat& io_frame) {
 		this->blue.proc.binary = cv::Mat{fsz, CV_8UC1};
 	}
 
-	cv::resize(io_frame, this->buffer, fsz);
+	cv::resize(io_frame, this->buffer, fsz, 0, 0, cv::INTER_NEAREST);
 	cv::split(this->buffer, this->channels);
 
 	cv::Mat annotations = cv::Mat::zeros(io_frame.size(), CV_8UC3);
@@ -234,6 +235,8 @@ void CargoPipeline::process(cv::Mat& io_frame) {
 				// if debug
 				cv::circle(annotations, v.center, v.radius, ::markup_map[~this->red.B_CLR][0]);
 			}
+		} else {
+			for(RedCargo& target : this->red.targets) { target.setExpired(); }
 		}
 		if(_contours) {
 			::rescale(this->red.proc.contours, this->scale);
@@ -250,7 +253,7 @@ void CargoPipeline::process(cv::Mat& io_frame) {
 			this->blue.targets.resize(this->blue.proc.objects.size());
 			cv::Mat1f tvec, rvec;
 			std::array<cv::Point2f, 4> outline;
-			for(size_t i = 0; i < this->blue.proc.objects.size(); i++) {
+			for(size_t i = 0; i < this->blue.targets.size(); i++) {
 				const CvCargo& v = this->blue.proc.objects[i] *= this->scale;
 				outline = {
 					cv::Point2f(v.center.x - v.radius, v.center.y),
@@ -259,13 +262,16 @@ void CargoPipeline::process(cv::Mat& io_frame) {
 					cv::Point2f(v.center.x, v.center.y + v.radius)
 				};
 				cv::solvePnP(
-					Cargo<>::world_coords, outline, rvec, tvec,
-					this->getSrcMatrix(), this->getSrcDistort()
+					Cargo<>::world_coords, outline,
+					this->getSrcMatrix(), this->getSrcDistort(),
+					rvec, tvec
 				);
 				this->blue.targets[i].update(reinterpret_cast<float*>(tvec.data));
 				// if debug
 				cv::circle(annotations, v.center, v.radius, ::markup_map[~this->blue.B_CLR][0]);
 			}
+		} else {
+			for(BlueCargo& target : this->blue.targets) { target.setExpired(); }
 		}
 		if(_contours) {
 			::rescale(this->blue.proc.contours, this->scale);
@@ -282,7 +288,7 @@ void CargoPipeline::process(cv::Mat& io_frame) {
 		} else {
 			cv::cvtColor((_blue ? this->blue.proc.binary : this->red.proc.binary), this->buffer, cv::COLOR_GRAY2BGR);
 		}
-		cv::resize(this->buffer, io_frame, io_frame.size(), cv::INTER_LINEAR);
+		cv::resize(this->buffer, io_frame, io_frame.size(), cv::INTER_NEAREST);
 	}
 	cv::bitwise_or(annotations, io_frame, io_frame);
 

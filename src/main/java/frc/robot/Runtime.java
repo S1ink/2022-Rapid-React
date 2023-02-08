@@ -90,9 +90,12 @@ public class Runtime extends TimedRobot {
 	public Runtime() {
 		System.out.println("RUNTIME INITIALIZATION");
 
+		SmartDashboard.putData("IMU", this.spi_imu);
+
 		this.drivebase.setSpeedScaling(Constants.teleop_drivebase_scaling);
 		this.drivebase.setSpeedDeadband(Constants.teleop_drivebase_deadband);
 		this.drivebase.setSpeedSquaring(Constants.teleop_drivebase_speed_squaring);
+		//this.drivebase.setBrakeMode();
 
 		this.cargo_sys.shooter.rateLimit(Constants.shooter_ramp_limit);
 

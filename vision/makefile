@@ -52,7 +52,7 @@ LDLIBS := -ltensorflowlite -ledgetpu -lopencv_gapi \
 	-lopencv_calib3d -lopencv_features2d -lopencv_dnn \
 	-lopencv_flann -lopencv_videoio -lopencv_imgcodecs \
 	-lopencv_imgproc -lopencv_core -lvs3407 -lcameraserver \
-	-lntcore -lcscore -lwpiutil -lopencv_aruco #-lpigpio
+	-lntcore -lcscore -lwpiutil -lopencv_aruco -lpigpio
 
 
 ifeq ($(OS),Windows_NT)

@@ -108,7 +108,7 @@ public final class Constants {
 		cl_encoder_inversions = Inversions.BOTH;	// which encoders should be inverted (aka "phase-changed" in the phoenix api)
 	public static final ClosedLoopDifferentialDrive.CLDriveParams
 		cl_params = new ClosedLoopDifferentialDrive.CLDriveParams(
-			//Units.inchesToMeters(drivetrack_width_inches),		// drivebase track width in meters
+			Units.inchesToMeters(drivetrack_width_inches),		// drivebase track width in meters
 			1.3553,	// empirical value from characterization -> seems very high?
 			Units.inchesToMeters(drivewheel_diameter_inches),	// drivebase wheel diameter in meters
 			1.1185,	// "kS"(volts) -> base voltage required to overcome static friction -> from SysID characterization

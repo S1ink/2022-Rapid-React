@@ -206,6 +206,15 @@ public class ClosedLoopDifferentialDrive extends DriveBase {
 		return new GoTo(this, p);
 	}
 
+	public void setBrakeMode() {
+		this.left.setNeutralMode(NeutralMode.Brake);
+		this.right.setNeutralMode(NeutralMode.Brake);
+	}
+	public void setCoastMode() {
+		this.left.setNeutralMode(NeutralMode.Coast);
+		this.right.setNeutralMode(NeutralMode.Coast);
+	}
+
 	// "Setters" -> require command key
 	public void resetOdometry(Pose2d p, CLDriveCommand c) {
 		this.resetEncoders(c);

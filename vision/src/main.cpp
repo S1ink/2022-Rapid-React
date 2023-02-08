@@ -1,25 +1,115 @@
 #include <vector>
 
+#include <pigpio.h>
+
 #include "cpp-tools/src/sighandle.h"
 #include "cpp-tools/src/timing.h"
 //#define OPENCV_TRAITS_ENABLE_DEPRECATED
 #include <core/visionserver2.h>
 #include <core/visioncamera.h>
 #include <core/config.h>
-#include <core/mem.h>
+#include <core/neon.h>
+#define APRILPOSE_DEBUG
+#include <core/aprilpose.h>
 
 #include "rapidreact2.h"
 #include "calibrations.h"
+#include "field.h"
 
 
-extern "C" int32_t test_add6_asm(
-	int32_t a,
-	int32_t b,
-	int32_t c,
-	int32_t d,
-	int32_t e,
-	int32_t f
-);
+extern "C" int32_t test_add6_asm(int32_t a, int32_t b, int32_t c, int32_t d, int32_t e, int32_t f);
+void perftest();
+void featureDemo();
+void i2c(bool*);
+void i2c_(bool*);
+void I2C();
+
+class TestTarget : public vs2::UniqueTarget<TestTarget> {
+public:
+	inline TestTarget() : UniqueTarget("Test") {}
+};
+
+std::thread sl, ma;
+bool s = true;
+StopWatch runtime("Runtime", &std::cout, 0);
+void on_exit() {
+	runtime.end();
+}
+
+int main(int argc, char* argv[]) {
+	runtime.setStart();
+	SigHandle::get();
+	atexit(on_exit);
+
+	//perftest();
+
+	std::vector<VisionCamera> cameras;
+
+	if(argc > 1 && initNT(argv[1]) && createCameras(cameras, calibrations, argv[1])) {}
+	else if(initNT() && createCameras(cameras, calibrations)) {}
+	else { return EXIT_FAILURE; }
+
+	vs2::VisionServer::Init();
+	vs2::VisionServer::addCameras(std::move(cameras));
+	vs2::VisionServer::addStreams(1);
+	UHPipeline uh_pipe(vs2::BGR::BLUE);
+	CargoPipeline c_pipe;
+	vs2::VisionServer::addPipelines({&uh_pipe, &c_pipe});
+	AprilPose ap{FIELD_2022};
+	vs2::VisionServer::addPipeline(&ap);
+	// vs2::VisionServer::compensate();
+	// {
+	// 	std::vector<TestTarget> targets;
+	// 	targets.resize(3);
+	// }
+	//featureDemo();
+	vs2::VisionServer::run(60.f);
+	atexit(vs2::VisionServer::stopExit);
+
+	//bool s = true;
+	//gpioInitialise();
+	// sl = std::thread(i2c, &s);
+	// ma = std::thread(i2c_, &s);
+	// for(;s;) {
+	// 	if(std::cin.get()) {
+	// 		s = false;
+	// 		sl.join();
+	// 		ma.join();
+	// 	}
+	// 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	// }
+	//I2C();
+	//gpioTerminate();
+
+}
+
+// LIST OF THINGS
+/*	x = done, x? = kind of done
+x Dynamic resizing/scaling
+x Position math -> networktables
+x Test communication with robot -> target positioning w/ drive program
+x multiple cameras -> switching (find out what we want to do)
+x compression/stay under bandwidth limit
+x Modularize?
+x MORE CUSTOM ASSEMBLY!!!
+x Target abstraction and generalization (pipeline template param)
+x System for telling the robot when targeting info is outdated
+x Toggle pipeline processing (processing or just streaming)
+x Networktables continuity with multiple class instances
+x Multiple VisionServer processing instances, data protection/management -> vector of threads?
+- Robot-program mode where all settings are determined by robot program over ntables
+- Automatically deduce nt-connection mode
+x TensorFlow models
+x VS2 Targets/ntables output
+x Coral Edge TPU delegate support
+- Aruco/AprilTag-specific features?
+- >> LOGGING <<
+- Improve docs
+- Characterize and optimize ftime/threading
+- More robust/dynamic config & calibration options
+*/
+
+
 
 void perftest() {
 	constexpr size_t TEST_FRAMES{100};
@@ -78,258 +168,258 @@ void perftest() {
 	cv::imwrite("/mnt/usb0/asm.jpg", binary);
 }
 
-class ArucoTest;
+#include <unistd.h>
+#include <termios.h>
+char getch(int block = 1) {
+	char buf = 0;
+	struct termios old = {0};
 
-StopWatch runtime("Runtime", &std::cout, 0);
-void on_exit() { runtime.end(); }
+	if (tcgetattr(0, &old) < 0) {
+		perror("tcsetattr()");
+	}
 
-int main(int argc, char* argv[]) {
-	runtime.setStart();
-	SigHandle::get();
-	atexit(on_exit);
+	old.c_lflag &= ~ICANON;
+	old.c_lflag &= ~ECHO;
+	old.c_cc[VMIN] = block;
+	old.c_cc[VTIME] = 0;
 
-	//perftest();
+	if (tcsetattr(0, TCSANOW, &old) < 0) {
+		perror("tcsetattr ICANON");
+	}
+	if (read(0, &buf, 1) < 0) {
+		perror ("read()");
+	}
 
-	std::vector<VisionCamera> cameras;
+	old.c_lflag |= ICANON;
+	old.c_lflag |= ECHO;
 
-	if(argc > 1 && initNT(argv[1]) && createCameras(cameras, calibrations, argv[1])) {}
-	else if(initNT() && createCameras(cameras, calibrations)) {}
-	else { return EXIT_FAILURE; }
+	if (tcsetattr(0, TCSADRAIN, &old) < 0) {
+		perror ("tcsetattr ~ICANON");
+	}
 
-	vs2::VisionServer::Init();
-	vs2::VisionServer::addCameras(std::move(cameras));
-	vs2::VisionServer::addStreams(1);
-	//UHPipeline uh_pipe(vs2::BGR::BLUE);
-	//CargoPipeline c_pipe;
-	//vs2::VisionServer::addPipelines({&uh_pipe, &c_pipe});
-	vs2::VisionServer::addPipeline<ArucoTest>();
-	vs2::VisionServer::compensate();
-	vs2::VisionServer::run(60);
-	atexit(vs2::VisionServer::stopExit);
+	return (buf);
+}
+void featureDemo() {
+	std::cout << "Feature Demo v1.0.0\n[r]: run raw\n[s]: run single\n[m]: run multi\n[q]: stop vs\n[e]: exit\nCameras: "
+		<< vs2::VisionServer::numCameras() << "\nPipelines: " << vs2::VisionServer::numPipelines() << "\nStreams: " << vs2::VisionServer::numStreams()
+		<< std::endl;
+	
+	char i[5] = {0}, last[5] = {0};
+	int s = 1;
+	for(;;) {
+		i[0] = getch();
+		while(i[s] = getch(0)) {
+			s++;
+		}
+		s = 1;
+		switch(i[0]) {
+			case 'e': {
+				vs2::VisionServer::stop();
+				std::cout << "Exiting...\n";
+				return;
+			}
+			case 'q': {
+				vs2::VisionServer::stop();
+				std::cout << "Stopped VS.\n";
+				break;
+			}
+			case 'r': {
+				std::cout << (vs2::VisionServer::runRawThread() ? "Running raw.\n" : "Unable to run raw; stop previously running instances.\n");
+				break;
+			}
+			case 's': {
+				std::cout << (vs2::VisionServer::runSingleThread() ? "Running single.\n" : "Unable to run single; stop previously running instances.\n");
+				break;
+			}
+			case 'm': {
+				std::cout << (vs2::VisionServer::runThread() ? "Running multi.\n" : "Unable to run multi; stop previously running instances.\n");
+				break;
+			}
+			case 0: break;
+			default: {
+				std::cout << "Invalid Input.\n";
+			}
+		}
+		std::cout.flush();
+
+	}
 
 }
 
-// LIST OF THINGS
-/*	x = done, x? = kind of done
-x Dynamic resizing/scaling
-x Position math -> networktables
-x Test communication with robot -> target positioning w/ drive program
-x multiple cameras -> switching (find out what we want to do)
-x compression/stay under bandwidth limit
-x Modularize?
-? MORE CUSTOM ASSEMBLY!!! :)		<--
-x Target abstraction and generalization (pipeline template param)
-x System for telling the robot when targeting info is outdated
-x Toggle pipeline processing (processing or just streaming)
-x Networktables continuity with multiple class instances
-x Multiple VisionServer processing instances, data protection/management -> vector of threads?
-- Robot-program mode where all settings are determined by robot program over ntables
-- Automatically deduce nt-connection mode
-x TensorFlow models
-x VS2 Targets/ntables output
-x Coral Edge TPU delegate support
-- Aruco/AprilTag-specific features?
-- >> LOGGING <<
-- Improve docs
-- Characterize and optimize ftime/threading
-- More robust/dynamic config & calibration options
-*/
 
 
+#include <pigpio.h>
 
-// All of this will eventually be moved to a separate file, and possibly part of it into the main library
-#include <opencv2/aruco.hpp>
-#include <core/vision.h>
+void i2c(bool* s) {
+#define RE	(1 << 9)	// recieve enable
+#define TE	(1 << 8)	// transmit enable
+#define BK	(1 << 7)	// break and clear buffers
+#define I2E	(1 << 2)	// enable i2c mode
+#define EN	(1 << 0)	// enable bsc
 
-// https://docs.opencv.org/4.5.2/db/da9/tutorial_aruco_board_detection.html
-// https://docs.google.com/document/d/e/2PACX-1vQxVFxsY30_6sy50N8wWUpUhQ0qbUKnw7SjW6agbKQZ2X0SN_uXtNZhLB7AkRcJjLnlcmmjcyCNhn0I/pub
-// https://docs.google.com/document/d/e/2PACX-1vQxVFxsY30_6sy50N8wWUpUhQ0qbUKnw7SjW6agbKQZ2X0SN_uXtNZhLB7AkRcJjLnlcmmjcyCNhn0I/pub
-// https://docs.google.com/document/d/e/2PACX-1vSizkGFRocq8-QLCj38O68MO4wYCThk_z60g7KhBLf497UqnLHcLW9r1HcTKzwI_SoYLHZp7wPnU6H4/pub
-/*
-	Apparently the cv::aruco::Board class can be used to represent any 3D map of markers, so this
-	should act as a very nice way to implement a field-position detection pipeline. We just
-	need to get all of the locations of the markers as well as their ID's, then create
-	a board object.
-*/
-class ArucoTest : public vs2::VPipeline<ArucoTest> {
-public:
-	inline ArucoTest() : VPipeline("Aruco Test Pipeline") {}
-	void process(cv::Mat& io_frame) override {
-		this->corners.clear();
-		this->ids.clear();
-		cv::Size2i fsz = io_frame.size() / (int)SCALE;
-		if(this->buffer.size() != fsz) {
-			this->buffer = cv::Mat(fsz, CV_8UC3);
-		}
-		cv::resize(io_frame, this->buffer, fsz);
-		cv::aruco::detectMarkers(this->buffer, this->markers, this->corners, this->ids);
-		if(this->corners.size() > 0) {
-			rescale(this->corners, SCALE);
-			if(cv::aruco::estimatePoseBoard(
-				this->corners, this->ids, FIELD_2022,
-				this->getSrcMatrix(), this->getSrcDistort(),
-				this->rvec, this->tvec
-			)) {
-				cv::aruco::drawAxis(io_frame, this->getSrcMatrix(), this->getSrcDistort(), this->rvec, this->tvec, 100.f);
+	bsc_xfer_t transfer;
+	//gpioInitialise();
+	transfer.control = ((0x08 << 16) | RE | TE | I2E | EN);
+
+	if(bscXfer(&transfer) >= 0) {
+		transfer.rxCnt = 0;
+		std::cout << "Beginning Slave Transfer Queue" << std::endl;
+		int r_t = 0;
+		for(;*s;) {
+			bscXfer(&transfer);
+			if(transfer.rxCnt > 0) {
+				while(transfer.rxCnt > 0) {
+					r_t += transfer.rxCnt;
+					std::cout << "\nSlave recieved " << std::dec << transfer.rxCnt << " bytes.(Total:" << r_t << ")\n\t" << std::hex;
+					for(int i = 0; i < transfer.rxCnt; i++) {
+						std::cout << "0x" << (int)transfer.rxBuf[i] << "  ";
+					}
+					transfer.rxCnt = 0;
+					bscXfer(&transfer);
+				}
+				(std::cout << "\n\n").flush();
 			}
-			cv::aruco::drawDetectedMarkers(io_frame, this->corners, this->ids);
+			// if(transfer.rxCnt > 0) {
+			// 	std::cout << "Recieved " << transfer.rxCnt << " bytes:\n\t"
+			// 		<< *((float*)transfer.rxBuf) << std::endl;
+				
+			// 	// const char* mss = "Return Message from 0x08!";
+			// 	// strcpy(transfer.txBuf, mss);
+			// 	// transfer.txCnt = strlen(mss);
+			// }
+			//if(std::cin.get()) { break; }
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		}
 	}
+	transfer.control = ((0x08 << 16) | BK | !I2E | !EN);
+	bscXfer(&transfer);
+	//gpioTerminate();
 
-
-	constexpr static inline cv::aruco::PREDEFINED_DICTIONARY_NAME
-		FRC_DICT = cv::aruco::DICT_APRILTAG_36h11,
-		SIMPLE_DICT = cv::aruco::DICT_4X4_50
-	;
-	constexpr static inline size_t
-		SCALE{2};
-	// constexpr static inline bool
-	// 	REFINE_DETECTIONS = true;
-
-	static inline const cv::Ptr<cv::aruco::Board>	// the 2022 (nonofficial) field has 24 markers - link to source above
-		FIELD_2022{ cv::aruco::Board::create(
-			// calculations and formatting: https://docs.google.com/spreadsheets/d/1zpj37KxVP_r6md_0VjLPmQ9h4aVExXe4bx78hdGrro8/edit?usp=sharing
-			std::vector<std::vector<cv::Point3f>>{ {
-				{
-					cv::Point3f(-0.139,295.133,38.126),
-					cv::Point3f(-0.139,301.633,38.126),
-					cv::Point3f(-0.139,301.633,31.626),
-					cv::Point3f(-0.139,295.133,31.626)
-				}, {
-					cv::Point3f(127.272,212.76,71.182),
-					cv::Point3f(127.272,219.26,71.182),
-					cv::Point3f(127.272,219.26,64.682),
-					cv::Point3f(127.272,212.76,64.682)
-				}, {
-					cv::Point3f(117.53,209.863,57.432),
-					cv::Point3f(124.03,209.863,57.432),
-					cv::Point3f(124.03,209.863,50.932),
-					cv::Point3f(117.53,209.863,50.932)
-				}, {
-					cv::Point3f(0.157,195.905,35),
-					cv::Point3f(0.157,202.405,35),
-					cv::Point3f(0.157,202.405,28.5),
-					cv::Point3f(0.157,195.905,28.5)
-				}, {
-					cv::Point3f(0.157,135.037,35),
-					cv::Point3f(0.157,141.537,35),
-					cv::Point3f(0.157,141.537,28.5),
-					cv::Point3f(0.157,135.037,28.5)
-				}, {
-					cv::Point3f(7.11568287669421,65.3835825687076,38.313),
-					cv::Point3f(2.42031712330579,69.8784174312924,38.313),
-					cv::Point3f(2.42031712330579,69.8784174312924,31.813),
-					cv::Point3f(7.11568287669421,65.3835825687076,31.813)
-				}, {
-					cv::Point3f(36.7296828766942,34.8115825687076,38.313),
-					cv::Point3f(32.0343171233058,39.3064174312924,38.313),
-					cv::Point3f(32.0343171233058,39.3064174312924,31.813),
-					cv::Point3f(36.7296828766942,34.8115825687076,31.813)
-				}, {
-					cv::Point3f(65.9336828766942,3.94358256870762,38.313),
-					cv::Point3f(61.2383171233058,8.43841743129238,38.313),
-					cv::Point3f(61.2383171233058,8.43841743129238,31.813),
-					cv::Point3f(65.9336828766942,3.94358256870762,31.813)
-				}, {
-					cv::Point3f(648.139,28.867,38.126),
-					cv::Point3f(648.139,22.367,38.126),
-					cv::Point3f(648.139,22.367,31.626),
-					cv::Point3f(648.139,28.867,31.626)
-				}, {
-					cv::Point3f(521.063,111.26,71.182),
-					cv::Point3f(521.063,104.76,71.182),
-					cv::Point3f(521.063,104.76,64.682),
-					cv::Point3f(521.063,111.26,64.682)
-				}, {
-					cv::Point3f(530.47,114.167,57.432),
-					cv::Point3f(523.97,114.167,57.432),
-					cv::Point3f(523.97,114.167,50.932),
-					cv::Point3f(530.47,114.167,50.932)
-				}, {
-					cv::Point3f(647.843,128.27,35),
-					cv::Point3f(647.843,121.77,35),
-					cv::Point3f(647.843,121.77,28.5),
-					cv::Point3f(647.843,128.27,28.5)
-				}, {
-					cv::Point3f(647.843,188.964,35),
-					cv::Point3f(647.843,182.464,35),
-					cv::Point3f(647.843,182.464,28.5),
-					cv::Point3f(647.843,188.964,28.5)
-				}, {
-					cv::Point3f(640.861534684921,258.84072074132,38.438),
-					cv::Point3f(645.360465315079,254.14927925868,38.438),
-					cv::Point3f(645.360465315079,254.14927925868,31.938),
-					cv::Point3f(640.861534684921,258.84072074132,31.938)
-				}, {
-					cv::Point3f(611.549534684921,289.45972074132,38.313),
-					cv::Point3f(616.048465315079,284.76827925868,38.313),
-					cv::Point3f(616.048465315079,284.76827925868,31.813),
-					cv::Point3f(611.549534684921,289.45972074132,31.813)
-				}, {
-					cv::Point3f(582.285534684921,320.02772074132,38.313),
-					cv::Point3f(586.784465315079,315.33627925868,38.313),
-					cv::Point3f(586.784465315079,315.33627925868,31.813),
-					cv::Point3f(582.285534684921,320.02772074132,31.813)
-				}, {
-					cv::Point3f(312.974022737338,194.753894089996,30.938),
-					cv::Point3f(307.035977262662,192.110105910004,30.938),
-					cv::Point3f(307.035977262662,192.110105910004,24.438),
-					cv::Point3f(312.974022737338,194.753894089996,24.438)
-				}, {
-					cv::Point3f(291.246105910004,150.974022737338,30.938),
-					cv::Point3f(293.889894089996,145.035977262662,30.938),
-					cv::Point3f(293.889894089996,145.035977262662,24.438),
-					cv::Point3f(291.246105910004,150.974022737338,24.438)
-				}, {
-					cv::Point3f(335.025977262662,129.246105910004,30.938),
-					cv::Point3f(340.964022737338,131.889894089996,30.938),
-					cv::Point3f(340.964022737338,131.889894089996,24.438),
-					cv::Point3f(335.025977262662,129.246105910004,24.438)
-				}, {
-					cv::Point3f(356.753894089996,173.025977262662,30.938),
-					cv::Point3f(354.110105910004,178.964022737338,30.938),
-					cv::Point3f(354.110105910004,178.964022737338,24.438),
-					cv::Point3f(356.753894089996,173.025977262662,24.438)
-				}, {
-					cv::Point3f(302.123035778737,173.879364166192,98.0881815660862),
-					cv::Point3f(299.793644106692,167.81109139396,98.0881815660862),
-					cv::Point3f(302.524964221264,166.762635833808,92.2838184339138),
-					cv::Point3f(304.854355893308,172.83090860604,92.2838184339138)
-				}, {
-					cv::Point3f(312.120635833808,140.123035778737,98.0881815660862),
-					cv::Point3f(318.18890860604,137.793644106692,98.0881815660862),
-					cv::Point3f(319.237364166192,140.524964221264,92.2838184339138),
-					cv::Point3f(313.16909139396,142.854355893308,92.2838184339138)
-				}, {
-					cv::Point3f(345.876964221264,150.120635833808,98.0881815660862),
-					cv::Point3f(348.206355893308,156.18890860604,98.0881815660862),
-					cv::Point3f(345.475035778737,157.237364166192,92.2838184339138),
-					cv::Point3f(343.145644106692,151.169091393961,92.2838184339138)
-				}, {
-					cv::Point3f(335.879364166192,183.876964221263,98.0881815660862),
-					cv::Point3f(329.811091393961,186.206355893308,98.0881815660862),
-					cv::Point3f(328.762635833808,183.475035778737,92.2838184339138),
-					cv::Point3f(334.83090860604,181.145644106692,92.2838184339138)
-				}
-			} },
-			cv::aruco::getPredefinedDictionary(FRC_DICT),
-			std::array<int32_t, 24>{
-				0, 1, 2, 3, 4, 5, 6, 7,
-				10, 11, 12, 13, 14, 15, 16, 17,
-				40, 41, 42, 43,
-				50, 51, 52, 53
+}
+void i2c_(bool* s) {
+	//gpioInitialise();
+	int h = i2cOpen(1, 0x08, 0);
+	if(h >= 0) {
+		char buff[32];
+		char buff2[32];
+		//strcpy(buff, "Random Number: ");
+		//buff[18] = '\0';
+		int32_t itr = 1;
+		const int sz = 16;
+		for(;*s;) {
+			std::cout << "Sending Bytes: " << std::dec << sz << " (Total: " << ((itr++) * sz) << ")\n\t" << std::hex;
+			for(int i = 0; i < sz; i++) {
+				buff[i] = rand() & 0xFF;
+				std::cout << (int)buff[i] << " ";
 			}
-		)};
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			if(i2cWriteDevice(h, buff, sz)) {
+				std::cout << " --> Write Error";
+			}
+			std::cout << std::endl;
+			//int r = rand() & 0xFF;
+			//buff[15] = (r / 100) + '0';
+			//buff[16] = ((r % 100) / 10) + '0';
+			//buff[17] = (r % 10) + '0';
+			//i2cWriteDevice(h, buff, 19);
+			// int i = 0, t;
+			// while(((t = i2cReadDevice(h, buff2, 32)) > 0) && i < 10) {
+			// 	for(int k = 0; k < t; k++) {
+			// 		std::cout << buff2[k];
+			// 	}
+			// 	i += (t + 1);
+			// 	std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			// }
+			// memset(buff2, 0, 32);
+			// std::cout << std::endl;
+			//if(std::cin.get()) { break; }
+			std::this_thread::sleep_for(std::chrono::milliseconds(40));
+		}
+	}
+	i2cClose(h);
+	//gpioTerminate();
+}
 
-protected:
-	cv::Ptr<cv::aruco::Dictionary> markers{
-		cv::aruco::getPredefinedDictionary(FRC_DICT)
-	};
+inline int xfer_transmitted(int s) { return (s >> 16) & 0b11111; }
+inline int xfer_rfifo(int s) { return (s >> 11) & 0b11111; }
+inline int xfer_tfifo(int s) { return (s >> 6) & 0b11111; }
+void I2C() {
+	const int id = 0x08;
+	bsc_xfer_t xfer;
+	xfer.control = ((id << 16) | RE | TE | I2E | EN);
+	int h = i2cOpen(1, id, 0);
+	if(h >= 0 && bscXfer(&xfer) >= 0) {
+		//uint8_t buff[32];
+		memset(xfer.txBuf, 0, 512);
+		bscXfer(&xfer);
+		bscXfer(&xfer);
+		std::cout << "Randomizing TxBuffer:\n" << std::hex;
+		for(int i = 0; i < sizeof(xfer.txBuf) / sizeof(int); i++) {
+			((int*)xfer.txBuf)[i] = rand();
+			std::cout << "0x" << ((int*)xfer.txBuf)[i] << ' ';
+		}
+		std::cout << "\n\n" << std::dec;
+		xfer.txCnt = sizeof(xfer.txBuf);
+		int k = bscXfer(&xfer);
+		std::cout << "Copied " << xfer_transmitted(k) << " bytes, "
+			<< xfer_rfifo(k) << " bytes in recieve FIFO, " << xfer_tfifo(k) << " bytes in transmit fifo\n"
+			<< "Is transmit full?: " << ((k >> 2) & 1) << "\nFull status: " << k << "\n\n";
+		// while(k - xfer_transmitted(bscXfer(&xfer))) {
+		// }
+		uint8_t buff[32];
+		std::cout << "Buffer before read:\n" << std::hex;
+		for(int i = 0; i < sizeof(buff) / sizeof(int); i++) {
+			std::cout << "0x" << ((int*)buff)[i] << ' ';
+		}
+		k = i2cReadDevice(h, (char*)buff, sizeof(buff));
+		std::cout << std::dec << "\n\nRead " << k << " bytes\n" << std::hex;
+		for(int i = 0; i < sizeof(buff) / sizeof(int); i++) {
+			std::cout << "0x" << ((int*)buff)[i] << ' ';
+		}
+		std::cout << std::endl;
 
-	std::vector<std::vector<cv::Point2f> > corners;
-	std::vector<int32_t> ids;
-	std::array<float, 3> tvec, rvec;
-	cv::Mat buffer;
+
+		//memset(buff, 0, sizeof(buff));
+		memcpy(buff, "fjslfdkskjflasdjfkdsjlkdjfdsewe", 32);
+		std::cout << "\n\nWrite buffer:\n";
+		for(int i = 0; i < sizeof(buff); i++) {
+			std::cout << "0x" << (int)buff[i] << ' ';
+		}
+		std::cout << std::dec << "\nWrite status: " << i2cWriteDevice(h, (char*)buff, 32) << "\n\n";
+
+		k = bscXfer(&xfer);
+		std::cout << "Recieved " << xfer.rxCnt << " bytes, "
+			<< xfer_rfifo(k) << " bytes in recieve FIFO, " << xfer_tfifo(k) << " bytes in transmit fifo\n"
+			<< "Is transmit full?: " << ((k >> 2) & 1) << "\nFull status: " << k << "\n\n" << std::hex;
+		for(int i = 0; i < xfer.rxCnt; i++) {
+			std::cout << "0x" << (int)xfer.rxBuf[i] << ' ';
+		}
+		std::cout << std::endl;
 
 
-};
+		std::cout << std::dec << "\n\nRead at 0x00: " << i2cReadI2CBlockData(h, 0x00, (char*)buff, 32);
+		k = bscXfer(&xfer);
+		std::cout << "\n\nRecieved " << xfer.rxCnt << " bytes, "
+			<< xfer_rfifo(k) << " bytes in recieve FIFO, " << xfer_tfifo(k) << " bytes in transmit fifo\n"
+			<< "Is transmit full?: " << ((k >> 2) & 1) << "\nFull status: " << k << "\n\n" << std::hex;
+		for(int i = 0; i < xfer.rxCnt; i++) {
+			std::cout << "0x" << (int)xfer.rxBuf[i] << ' ';
+		}
+		std::cout << std::dec << "\n\nWrite at 0x00: " << i2cWriteBlockData(h, 0x00, (char*)buff, 1) << ", First byte: 0x" << std::hex << (int)buff[0] << std::dec;
+		k = bscXfer(&xfer);
+		std::cout << "\n\nRecieved " << xfer.rxCnt << " bytes, "
+			<< xfer_rfifo(k) << " bytes in recieve FIFO, " << xfer_tfifo(k) << " bytes in transmit fifo\n"
+			<< "Is transmit full?: " << ((k >> 2) & 1) << "\nFull status: " << k << "\n\n" << std::hex;
+		for(int i = 0; i < xfer.rxCnt; i++) {
+			std::cout << "0x" << (int)xfer.rxBuf[i] << ' ';
+		}
+		//std::cout << std::dec << "\n\nRead at 0x00: " << i2cReadBlockData(h, 0x00, (char*)buff);
+
+		// for(;;) {
+		// 	int k = i2cReadDevice(h, xfer.rxBuf, sizeof(xfer.txBuf));
+		// }
+	}
+	xfer.control = ((id << 16) | BK | !I2E | !EN);
+	bscXfer(&xfer);
+	i2cClose(h);
+}
